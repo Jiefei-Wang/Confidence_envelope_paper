@@ -1,0 +1,16 @@
+
+
+record1 <- c()
+record2 <- c()
+for(i in 1:1000){
+    x <- runif(10)
+    if(stouffer(x)$p <= 0.05){
+    record1 <- c(record1, stouffer(x)$p)
+    record2 <- c(record2, stouffer(x)$statistic)
+    }
+}
+critical(a, 10, 0.05)/sqrt(10)
+
+min(record2)
+
+stouffer(pvalues)$p

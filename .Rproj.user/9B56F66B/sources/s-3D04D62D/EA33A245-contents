@@ -1,0 +1,71 @@
+.GlobalNullStat <- setClass(
+    "GlobalNullStat",
+    list(
+        pvalueFunc = "ANY",
+        statFunc = "ANY",
+        statUpdataFunc = "ANY",
+        criticalFunc = "ANY"
+    )
+)
+
+GlobalNullStat <-
+    function(pvalueFunc = NULL, statFunc = NULL, statUpdataFunc = NULL,
+             criticalFunc = NULL)
+{
+    if (is.null(pvalueFunc)) {
+        if(is.null(statFunc))
+            stop("'pvalueFunc' and 'statFunc' cannot be both NULL")
+        if(is.null(criticalFunc))
+            stop("'pvalueFunc' and 'criticalFunc' cannot be both NULL")
+    }
+    .GlobalNullStat(
+        pvalueFunc = pvalueFunc,
+        statFunc = statFunc,
+        statUpdataFunc = statUpdataFunc,
+        criticalFunc = criticalFunc
+    )
+}
+
+setGeneric("stat", function(obj, x){
+    standardGeneric("stat")
+})
+setGeneric("updateStat", function(obj, oldStat, x){
+    standardGeneric("updateStat")
+})
+setGeneric("critical", function(obj, alpha, n){
+    standardGeneric("critical")
+})
+
+
+setMethod("stat", "GlobalNullStat", function(obj, x){
+    if (is.null(obj@statFunc)) {
+        res <- obj@pvalueFunc(x)
+    } else {
+        res <- obj@statFunc(x)
+    }
+    structure(as.numeric(res), original = res, samples = x)
+})
+
+setMethod("updateStat", "GlobalNullStat", function(obj, oldStat, x){
+    newSample <- c(attr(oldStat, "samples"), x)
+    if (is.null(obj@statUpdataFunc)) {
+        stat(obj, newSample)
+    } else {
+        newStat <- obj@statUpdataFunc(attr(oldStat, "original"), x)
+        structure(
+            as.numeric(newStat),
+            original = newStat,
+            samples = newSample
+            )
+    }
+})
+
+setMethod("critical", "GlobalNullStat", function(obj, alpha, n){
+    if (is.null(obj@statFunc)) {
+        alpha
+    } else {
+        obj@criticalFunc(alpha, n)
+    }
+})
+
+
