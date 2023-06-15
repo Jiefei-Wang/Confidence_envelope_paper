@@ -1,71 +1,48 @@
-.GlobalNullStat <- setClass(
+
+## GlobalNullStat class
+## statFunc: function to calculate the statistic, large value means significance
+## statUpdataFunc: function to update the statistic
+## criticalFunc: function to calculate the critical value
+.GlobalNullStat <- setRefClass(
     "GlobalNullStat",
-    list(
-        pvalueFunc = "ANY",
+    fields = list(
         statFunc = "ANY",
         statUpdataFunc = "ANY",
-        criticalFunc = "ANY"
+        criticalFunc = "ANY",
+        samples = "numeric",
+        statValue = "numeric"
+    ),
+    methods = list(
+        initialize=function(statFunc=NULL, statUpdataFunc=NULL, criticalFunc){
+            .self$statFunc <- statFunc
+            .self$statUpdataFunc <- statUpdataFunc
+            .self$criticalFunc <- criticalFunc
+            .self$samples <- numeric(0)
+            .self$statValue <- numeric(0)
+        },
+        addSamples = function(x){
+            if (is.null(statUpdataFunc)) {
+                ## add x to samples and update statValue
+                samples <<- append(.self$samples, x)
+                statValue <<- statFunc(samples)
+            } else {
+                if (is.null(statFunc)){
+                    statValue <<- statUpdataFunc(statValue, samples, x)
+                }else{
+                    statValue <<- statFunc(x)
+                }
+                samples <<- append(.self$samples, x)
+            }
+            statValue
+        },
+        hypothesisTest = function(alpha){
+            if(length(samples)==0)
+                stop("No samples added!")
+            statValue > criticalFunc(alpha, length(samples))
+        },
+        reset = function(){
+            samples <<- numeric(0)
+            statValue <<- numeric(0)
+        }
     )
 )
-
-GlobalNullStat <-
-    function(pvalueFunc = NULL, statFunc = NULL, statUpdataFunc = NULL,
-             criticalFunc = NULL)
-{
-    if (is.null(pvalueFunc)) {
-        if(is.null(statFunc))
-            stop("'pvalueFunc' and 'statFunc' cannot be both NULL")
-        if(is.null(criticalFunc))
-            stop("'pvalueFunc' and 'criticalFunc' cannot be both NULL")
-    }
-    .GlobalNullStat(
-        pvalueFunc = pvalueFunc,
-        statFunc = statFunc,
-        statUpdataFunc = statUpdataFunc,
-        criticalFunc = criticalFunc
-    )
-}
-
-setGeneric("stat", function(obj, x){
-    standardGeneric("stat")
-})
-setGeneric("updateStat", function(obj, oldStat, x){
-    standardGeneric("updateStat")
-})
-setGeneric("critical", function(obj, alpha, n){
-    standardGeneric("critical")
-})
-
-
-setMethod("stat", "GlobalNullStat", function(obj, x){
-    if (is.null(obj@statFunc)) {
-        res <- obj@pvalueFunc(x)
-    } else {
-        res <- obj@statFunc(x)
-    }
-    structure(as.numeric(res), original = res, samples = x)
-})
-
-setMethod("updateStat", "GlobalNullStat", function(obj, oldStat, x){
-    newSample <- c(attr(oldStat, "samples"), x)
-    if (is.null(obj@statUpdataFunc)) {
-        stat(obj, newSample)
-    } else {
-        newStat <- obj@statUpdataFunc(attr(oldStat, "original"), x)
-        structure(
-            as.numeric(newStat),
-            original = newStat,
-            samples = newSample
-            )
-    }
-})
-
-setMethod("critical", "GlobalNullStat", function(obj, alpha, n){
-    if (is.null(obj@statFunc)) {
-        alpha
-    } else {
-        obj@criticalFunc(alpha, n)
-    }
-})
-
-

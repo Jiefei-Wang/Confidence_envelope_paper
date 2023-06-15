@@ -1,27 +1,44 @@
-BJStat <- function(x){
-    exceedance::GKSStat(x, statName = "BJ+", pvalue = FALSE)$statValue
+## Fisher statistics
+fisherStat <- function(x){
+    x[x==0] <- 1e-10
+    x[x==1] <- 1-1e-10
+    -2*sum(log(x))
 }
-BJCritical <- function(alpha, n){
-    exceedance::GKSCritical(n,alpha, statName = "BJ+")
-}
-
-BJGlobal <- function(){
-    GlobalNullStat(statFunc = BJStat, criticalFunc = BJCritical)
-}
-
-
-StoufferStat <- function(pvalues){
-    sum(qnorm(pvalues))
+updataFisherStat <- function(statValue, samples, x){
+    x[x==0] <- 1e-10
+    x[x==1] <- 1-1e-10
+    statValue - 2*sum(log(x))
 }
 
-StoufferCritical <- function(n, alpha){
-    qnorm(alpha)*sqrt(n)
+fisherCritical <- function(alpha, n){
+    qchisq(1-alpha, df = 2*n, lower.tail = TRUE)
 }
 
-StoufferGlobal <- function(){
-    GlobalNullStat(statFunc = StoufferStat, criticalFunc = StoufferCritical)
+FisherGlobal <- function(){
+    .GlobalNullStat(statFunc = fisherStat, 
+                        statUpdataFunc = updataFisherStat,
+                        criticalFunc = fisherCritical)
 }
 
+## Stoffer statistics
+stoufferStat <- function(x){
+    x[x==0] <- 1e-10
+    x[x==1] <- 1-1e-10
+    -sum(qnorm(x))
+}
+updateStofferStat <- function(statValue, samples, x){
+    x[x==0] <- 1e-10
+    x[x==1] <- 1-1e-10
+    statValue - qnorm(x)
+}
+stoufferCritical <- function(alpha,n){
+    qnorm(1-alpha)*sqrt(n)
+}
 
+StofferGlobal <- function(){
+    .GlobalNullStat(statFunc = stoufferStat, 
+                        statUpdataFunc = updateStofferStat,
+                        criticalFunc = stoufferCritical)
+}
 
 
