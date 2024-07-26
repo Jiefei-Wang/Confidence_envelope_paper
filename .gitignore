@@ -54,3 +54,6 @@ test/
 
 .vscode/
 .Rhistory
+
+.Rbuildignore
+.Rhistory
