@@ -1,87 +1,25 @@
-n <- 12
-nGroups <- 3
-groupSize <- n/nGroups
-nGroupAlter <- 2
-alpha <- 0.05
-globalTest <- FisherGlobal()
 
-trueNullList <- rep(TRUE, n)
-if (nGroupAlter > 0) {
-    for(k in (1:nGroups) * groupSize){
-        trueNullList[k - (1:nGroupAlter) +1] <- FALSE
-    }
+## fast algorithm
+generatePvals <- function(n, n_null, a, b){
+    pval_null <- runif(n_null)
+    pval_alt <- rbeta(n - n_null, a,b)
+    c(pval_null, pval_alt)
+}
+n <- 6
+n_null <- 3
+a <- 1
+b <- 10
+trueNulls <- seq_len(n_null)
+
+alpha<-0.05
+func <- pi_generator(0.5)
+
+for(i in 1:1000){
+    pvals <- generatePvals(n, n_null, a, b)
+    res1 <- generalCE(pvals, func, alpha, BJTest)$upper
+    res2 <- pi_BJ_fast(pvals, alpha, func)$upper
+    stopifnot(all(res1 == res2))
 }
 
-trueNullIndex <- which(trueNullList)
-trueAltIndex <- which(!trueNullList)
-hypoGroup <- rep(1:nGroups, each = groupSize)
-
-## Given a set of hypotheses, 
-## return the number of hypotheses in each group
-hypothesisInGroups <- function(hypotheses, AllowedGroups=NULL){
-    counts <- rep(0, nGroups)
-    for(i in hypotheses){
-        counts[hypoGroup[i]] <- counts[hypoGroup[i]] + 1
-    }
-    if(!is.null(AllowedGroups))
-        counts <- counts[AllowedGroups]
-    counts
-}
-
-lossGenerator <- function(cutoff, AllowedGroups=NULL){
-    force(cutoff)
-    function(trueNulls){
-        if(is.null(AllowedGroups))
-            AllowedGroups <- seq_along(cutoff)
-        ## Number of true nulls in each group
-        counts <- hypothesisInGroups(trueNulls, AllowedGroups)
-        ## Whether the number of true alternatives in each group 
-        ## is less than cutoff
-        sum(groupSize - counts < cutoff[AllowedGroups])
-    }
-}
-
-        
-
-test_that(
-    "fast algorithm, no filter",
-    {
-        cutoff <- c(4, 2, 1)
-        loss <- lossGenerator(cutoff)
-
-        set.seed(1)
-        nSim <- 20
-        final <- c()
-        for(i in 1:nSim){
-            pvalues <- rbeta(n, 0.5, 4)
-            nullSets <- findNullSets(pvalues, globalTest, alpha)
-            res1 <- GE(pvalues, alpha, globalTest, loss, nullSets = nullSets)$max
-            res2 <- FalseCoverage(globalTest, pvalues, groups, cutoff, alpha)
-            final <- rbind(final, c(res1, res2))
-            message(i)
-        }
-        testthat::expect_identical(final[,1], final[,2])
-    }
-)
-
-
-test_that(
-    "fast algorithm with filter",
-    {
-        cutoff <- c(1, 0, 0)
-        loss <- lossGenerator(cutoff)
-        
-        set.seed(1)
-        nSim <- 20
-        final <- c()
-        for(i in 1:nSim){
-            pvalues <- rbeta(n, 0.5, 4)
-            nullSets <- findNullSets(pvalues, globalTest, alpha)
-            res1 <- GE(pvalues, alpha, globalTest, loss, nullSets = nullSets)$max
-            res2 <- FalseCoverage(globalTest, pvalues, groups, cutoff, alpha)
-            final <- rbind(final, c(res1, res2))
-            message(i)
-        }
-        testthat::expect_identical(final[,1], final[,2])
-    }
-)
+func(1:5)
+func(c(1,3,4,5,6))

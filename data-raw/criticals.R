@@ -10,29 +10,17 @@ parallel::clusterEvalQ(cl, devtools::load_all())
 
 # BJCriticalSpace <- new.env(parent = emptyenv())
 
-for(n in 101:1000){
-    alpha <- 0
-    key <- getBJKey(n,alpha,TRUE)
-    assign(key,0,envir = BJCriticalSpace)
-    alpha <- 1
-    key <- getBJKey(n,alpha,TRUE)
-    assign(key,1,envir = BJCriticalSpace)
-
-    alpha_list <- seq(0.01,0.99,0.01)
-    final <- foreach(alpha=seq(0.01,0.99,0.01)) %dopar% {
-        res <- genericCritical(
-        pvalueFunc= BJExactPvalue,searchRange=c(0,1),
-        n=n,alpha=alpha,
-        oneSide = TRUE
-        )
-        res
-    }
-    for(i in seq_along(alpha_list)){
-        alpha <- alpha_list[i]
-        key <- getBJKey(n,alpha,TRUE)
-        assign(key,final[[i]],envir = BJCriticalSpace)
-    }
-    message(n)
+n_list <- 1:1000
+alpha <- 0.05
+l <- c(0,1)
+h <- c(0,1)
+final <- foreach(n=n_list) %dopar% {
+  BJExactCritical(n,alpha, l, h)
+}
+for(i in seq_along(n_list)){
+    n <- n_list[i]
+    key <- getBJKey(n,alpha, l, h)
+    assign(key,final[[i]],envir = BJCriticalSpace)
 }
 
 usethis::use_data(BJCriticalSpace, internal = TRUE, overwrite = TRUE)

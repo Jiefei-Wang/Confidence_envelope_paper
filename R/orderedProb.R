@@ -35,8 +35,11 @@ get_h <- function(value,func_data){
     result
 }
 
+## the probability that
+## l[i] < pvals[i] < h[i] for all i
+## where pvals is from a uniform distribution
 orderedProb <- function(l,h){
-    if(length(l)==0) return(NA)
+    stopifnot(length(l)==length(h))
     if(any(l>=h)) return(0)
     n <- length(l)
     for(i in seq_len(n-1)){
@@ -55,10 +58,4 @@ orderedProb <- function(l,h){
     diff_t <- diff(total)
     m <- length(l)
     compute_prob_fft(m,g_value,h_value,n_t,diff_t)
-}
-
-BJLocalCritical<-function(statValue,n){
-    l=vapply(seq_len(n),function(x)qbeta(statValue,x,n-x+1),numeric(1))
-    h=vapply(seq_len(n),function(x)qbeta(1 - statValue,x,n-x+1),numeric(1))
-    list(l =l,h= h)
 }
