@@ -1,4 +1,5 @@
-devtools::load_all()
+# devtools::load_all()
+library(generalExceedance)
 source("setup.r",local =TRUE)
 library(BiocParallel)
 library(cp4p)
@@ -13,22 +14,25 @@ power_table <- c()
 
 for(pi0 in pi0_list){
     message("pi0: ", pi0)
-    n <- 1000
+    n <- 10
     n_null <- n*pi0
     mu <- 2
     trueNulls <- seq_len(n_null)
     lambda <- 0.5
+    alpha <- 0.05
+    nsim <- 10
+
+    set.seed(1)
+    pvalsList <- lapply(1:nsim, function(x) generatePvals(n, n_null, mu))
 
 
-    nsim <- 1000
-    simulation2 <- function(x, lambda, pi_generator, story_generator, generatePvals, n, n_null, mu, trueNulls){
-        devtools::load_all(quiet = TRUE)
-        pvals <- generatePvals(n, n_null, mu)
+    simulation2 <- function(x, lambda, pi_generator, story_generator, generatePvals, n, n_null, mu, trueNulls, alpha, pvalsList){
+        pvals <- pvalsList[[x]]
         pi_fun <- pi_generator(lambda, pvals)
         res_others <- c()
         res_GCB <- c()
     
-        res_GCB <- pi_BJ_fast(pi_fun, pvals, 0.05, c(0,1), c(0,1))$upper
+        res_GCB <- generalExceedance::pi_BJ_fast(pi_fun, pvals, 0.05, c(0,1), c(0,1))$upper
         methods <- c("st.boot", "st.spline", "langaas", "jiang", "histo", "pounds", "abh","slim")
         res_others<- sapply(methods, function(method) cp4p::estim.pi0(pvals, pi0.method = method)[[1]])
 
@@ -57,6 +61,7 @@ for(pi0 in pi0_list){
 
         FDP <- c()
         power <- c()
+        n_rejects <- c()
         for(i in seq_along(pi0_estimates)){
             # cur_alpha <- alpha_adj[i]
             cur_pi0 <- pi0_estimates[i]
@@ -71,17 +76,18 @@ for(pi0 in pi0_list){
             }else{
                 power[i] <- sum(pvals_adj[alt_idx] <= alpha)/ max(1, n-n_null)
             }
+            n_rejects[i] <- sum(pvals_adj <= alpha)
         }
 
         names(FDP) <- names(power) <- names(pi0_estimates)
 
-        list(FDP, power, pvals)
+        list(FDP, power, pvals, n_rejects)
     }
 
     res <- bplapply(1:nsim, simulation2, BPPARAM = param, 
     lambda=lambda, 
     pi_generator = pi_generator, story_generator = story_generator, 
-    generatePvals = generatePvals, n = n, n_null = n_null, mu = mu, trueNulls = trueNulls)
+    generatePvals = generatePvals, n = n, n_null = n_null, mu = mu, trueNulls = trueNulls, alpha = alpha, pvalsList = pvalsList)
 
     ## results are list of lists, 
     ## combine elelments of each list by row
@@ -90,14 +96,18 @@ for(pi0 in pi0_list){
     res_FDP <- all_res[[1]]
     res_power <- all_res[[2]]
     res_pvals <- all_res[[3]]
+    res_n_jects <- all_res[[4]]
+
+
+    has_rejections <- res_n_jects > 0
 
     ave_FDP <- colMeans(res_FDP)
-    ave_conditional_FDP <- colMeans(res_FDP[res_FDP >0])
+    ave_conditional_FDP <- colSums(res_FDP)/colSums(has_rejections)
+    ave_power <- colMeans(res_power)
 
     # idx <- which(res_FDP[,1]>0)
     # pvals <- res_pvals[45,]
 
-    ave_power <- colMeans(res_power)
     stopifnot(!any(is.na(ave_FDP)))
     FDP_table <- cbind(FDP_table, ave_FDP)
     power_table <- cbind(power_table, ave_power)

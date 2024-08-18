@@ -112,7 +112,7 @@ pi_fast <- function(pvals, alpha, lambda){
 
 }
 
-
+#' @export 
 pi_BJ_fast <- function(func, pvals, alpha, l=c(0,1), h=NULL){
     lower <- func(integer(0))
     upper <- func(integer(0))
