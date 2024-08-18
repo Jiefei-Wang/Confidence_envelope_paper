@@ -7,6 +7,7 @@ param <- SnowParam(workers = 20, type = "SOCK", progressbar =TRUE, RNGseed = 1, 
 pi0_list <- seq(0,1,0.2)
 
 FDP_table <- c()
+conditional_FDP_table <- c()
 power_table <- c()
 
 
@@ -50,7 +51,7 @@ for(pi0 in pi0_list){
             null_idx <- seq(n)
             alt_idx <- integer(0)
         }else{
-            null_idx <- sample(seq(n), n_null)
+            null_idx <- seq(n_null)
             alt_idx <- seq(n_null+1, n)
         }
 
@@ -63,25 +64,24 @@ for(pi0 in pi0_list){
             if(n_null == 0){
                 FDP[i] <- 0
             }else{
-                FDP[i] <- mean(pvals_adj[null_idx] <= alpha)/ max(1, sum(pvals <= alpha))
+                FDP[i] <- sum(pvals_adj[null_idx] <= alpha)/ max(1, sum(pvals_adj <= alpha))
             }
             if(n_null == n){
                 power[i] <- 1
             }else{
-                power[i] <- mean(pvals_adj[alt_idx] <= alpha)
+                power[i] <- sum(pvals_adj[alt_idx] <= alpha)/ max(1, n-n_null)
             }
         }
 
         names(FDP) <- names(power) <- names(pi0_estimates)
 
-        list(FDP, power)
+        list(FDP, power, pvals)
     }
 
-    opt <- bpoptions(RNGseed = 1)
     res <- bplapply(1:nsim, simulation2, BPPARAM = param, 
     lambda=lambda, 
     pi_generator = pi_generator, story_generator = story_generator, 
-    generatePvals = generatePvals, n = n, n_null = n_null, mu = mu, trueNulls = trueNulls, BPOPTIONS = opt)
+    generatePvals = generatePvals, n = n, n_null = n_null, mu = mu, trueNulls = trueNulls)
 
     ## results are list of lists, 
     ## combine elelments of each list by row
@@ -89,10 +89,16 @@ for(pi0 in pi0_list){
 
     res_FDP <- all_res[[1]]
     res_power <- all_res[[2]]
+    res_pvals <- all_res[[3]]
 
     ave_FDP <- colMeans(res_FDP)
-    ave_power <- colMeans(res_power)
+    ave_conditional_FDP <- colMeans(res_FDP[res_FDP >0])
 
+    # idx <- which(res_FDP[,1]>0)
+    # pvals <- res_pvals[45,]
+
+    ave_power <- colMeans(res_power)
+    stopifnot(!any(is.na(ave_FDP)))
     FDP_table <- cbind(FDP_table, ave_FDP)
     power_table <- cbind(power_table, ave_power)
 }
@@ -105,4 +111,55 @@ library(openxlsx)
 write.xlsx(FDP_table, "FDP_table.xlsx")
 write.xlsx(power_table, "power_table.xlsx")
 
+library(tidyverse)
+FDP_plot <- t(FDP_table)|>
+as.data.frame()|>
+mutate(pi0 = pi0_list) |>
+pivot_longer(-pi0, names_to = "method", values_to = "FDP") 
 
+power_plot <- t(power_table)|>
+as.data.frame()|>
+mutate(pi0 = pi0_list) |>
+pivot_longer(-pi0, names_to = "method", values_to = "power")
+
+selections <- c("langaas", "jiang", "histo", "GCB")
+
+## Make line plot to show FDP for each method as a function of pi0
+library(ggplot2)
+
+FDP_plot|>
+filter(method %in% selections) |>
+ggplot(aes(x=pi0, y=FDP, group=method,shape = method)) + geom_point() + geom_line() + theme_minimal() + labs(x="pi0", y="FDR") + ylim(0,0.1) +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+geom_hline(yintercept=0.05, linetype="dashed", color = "black") 
+
+## save
+ggsave("FDP_plot.png")
+
+
+power_plot|>
+filter(method %in% selections) |>
+ggplot(aes(x=pi0, y=power, group=method,shape = method)) + geom_point() + geom_line() + theme_minimal() + labs(x="pi0", y="Power") + 
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+## save
+ggsave("power_plot.png")
+
+
+pi0 <- 1
+n <- 1000
+n_null <- n*pi0
+mu <- 2
+trueNulls <- seq_len(n_null)
+null_idx <- seq(n_null)
+alt_idx <- seq(n_null+1, n)
+lambda <- 0.5
+FDP <- c()
+for(i in 1:1000){
+    pvals <- generatePvals(n, n_null, mu)
+    pvals_adj <- adjust.p(pvals, pi0 = pi0)$adjp$adjusted.p
+    FDP[i] <- sum(pvals_adj[null_idx] <= alpha)/ max(1, sum(pvals <= alpha))
+}
+
+
+mean(FDP)

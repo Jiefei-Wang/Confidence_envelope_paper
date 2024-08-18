@@ -57,3 +57,7 @@ test/
 
 .Rbuildignore
 .Rhistory
+
+*.csv
+*.png
+*.xlsx

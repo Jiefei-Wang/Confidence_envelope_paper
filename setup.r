@@ -1,8 +1,8 @@
 
 
 generatePvals <- function(n, n_null, mu){
-  pval_null <- runif(n_null)
-  pval_alt <- 1-pnorm(rnorm(n - n_null, mu))
+  pval_null <- runif(round(n_null))
+  pval_alt <- 1-pnorm(rnorm(round(n - n_null), mu))
   c(pval_null, pval_alt)
 }
 
