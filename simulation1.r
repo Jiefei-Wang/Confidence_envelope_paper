@@ -1,8 +1,9 @@
-devtools::load_all()
+## This script is used to estimate the coverage probability
+## You MUST create your parallel backend beforehand, e.g.:
+## param <- SnowParam(workers = 20)
 source("setup.r",local =TRUE)
 library(BiocParallel)
 library(cp4p)
-param <- SnowParam(workers = 20, type = "SOCK", progressbar =TRUE, RNGseed = 1, tasks=100)
 
 
 
