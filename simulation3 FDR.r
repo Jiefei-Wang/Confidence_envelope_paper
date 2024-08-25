@@ -1,11 +1,13 @@
+## This script is used to simulate the FDR and power of different methods under different pi0 values
+## You MUST create your parallel backend beforehand, e.g.:
+## param <- SnowParam(workers = 20)
+
 # devtools::load_all()
 library(generalExceedance)
-source("setup.r",local =TRUE)
-library(BiocParallel)
 library(cp4p)
-param <- SnowParam(workers = 20, type = "SOCK", progressbar =TRUE, RNGseed = 1, tasks=100)
-
-pi0_list <- seq(0,1,0.2)
+library(BiocParallel)
+source("setup.r",local =TRUE)
+pi0_list <- seq(0,1,0.1)
 
 FDP_table <- c()
 conditional_FDP_table <- c()
@@ -14,13 +16,13 @@ power_table <- c()
 
 for(pi0 in pi0_list){
     message("pi0: ", pi0)
-    n <- 10
+    n <- 1000
     n_null <- n*pi0
     mu <- 2
     trueNulls <- seq_len(n_null)
     lambda <- 0.5
     alpha <- 0.05
-    nsim <- 10
+    nsim <- 1000
 
     set.seed(1)
     pvalsList <- lapply(1:nsim, function(x) generatePvals(n, n_null, mu))
@@ -34,6 +36,7 @@ for(pi0 in pi0_list){
     
         res_GCB <- generalExceedance::pi_BJ_fast(pi_fun, pvals, 0.05, c(0,1), c(0,1))$upper
         methods <- c("st.boot", "st.spline", "langaas", "jiang", "histo", "pounds", "abh","slim")
+        # methods <- c("abh", "st.spline", "st.boot", "langaas")
         res_others<- sapply(methods, function(method) cp4p::estim.pi0(pvals, pi0.method = method)[[1]])
 
         ## all estimates, clamped to [alpha,1], 
@@ -65,7 +68,7 @@ for(pi0 in pi0_list){
         for(i in seq_along(pi0_estimates)){
             # cur_alpha <- alpha_adj[i]
             cur_pi0 <- pi0_estimates[i]
-            pvals_adj <- adjust.p(pvals, pi0 = cur_pi0)$adjp$adjusted.p
+            pvals_adj <- cp4p::adjust.p(pvals, pi0 = cur_pi0)$adjp$adjusted.p
             if(n_null == 0){
                 FDP[i] <- 0
             }else{
@@ -116,10 +119,17 @@ for(pi0 in pi0_list){
 colnames(FDP_table) <- paste0("pi0: ", pi0_list)
 colnames(power_table) <- paste0("pi0: ", pi0_list)
 
+save(FDP_table, power_table, file = "simulation3.RData")
+
+## load data
+load("simulation3.RData")
+
 ## save excel
 library(openxlsx)
-write.xlsx(FDP_table, "FDP_table.xlsx")
-write.xlsx(power_table, "power_table.xlsx")
+FDP_table2 <- as.data.frame(cbind(rownames(FDP_table), signif(FDP_table,2)))
+power_table2 <- as.data.frame(cbind(rownames(power_table), signif(power_table,2)))
+write.xlsx(FDP_table2, "FDP_table.xlsx")
+write.xlsx(power_table2, "power_table.xlsx")
 
 library(tidyverse)
 FDP_plot <- t(FDP_table)|>
@@ -132,44 +142,54 @@ as.data.frame()|>
 mutate(pi0 = pi0_list) |>
 pivot_longer(-pi0, names_to = "method", values_to = "power")
 
-selections <- c("langaas", "jiang", "histo", "GCB")
-
+selections <- c("abh", "st.spline", "st.boot", "langaas", "jiang", "GCB")
 ## Make line plot to show FDP for each method as a function of pi0
 library(ggplot2)
+library(gridExtra)
 
 FDP_plot|>
 filter(method %in% selections) |>
+mutate(method = factor(method, levels = selections))|>
+filter(pi0>0)|>
 ggplot(aes(x=pi0, y=FDP, group=method,shape = method)) + geom_point() + geom_line() + theme_minimal() + labs(x="pi0", y="FDR") + ylim(0,0.1) +
 theme(axis.text.x = element_text(angle = 45, hjust = 1))+
-geom_hline(yintercept=0.05, linetype="dashed", color = "black") 
+geom_hline(yintercept=0.05, linetype="dashed", color = "black") +
+scale_y_continuous(
+    breaks = scales::pretty_breaks(n = 5),
+    labels = scales::percent_format(accuracy = 1))+ 
+    theme(legend.position="none")
 
 ## save
-ggsave("FDP_plot.png")
+ggsave("FDP_plot.png", width = 4, height = 4)
 
 
 power_plot|>
 filter(method %in% selections) |>
+mutate(method = factor(method, levels = selections))|>
+filter(pi0<1) |>
 ggplot(aes(x=pi0, y=power, group=method,shape = method)) + geom_point() + geom_line() + theme_minimal() + labs(x="pi0", y="Power") + 
-theme(axis.text.x = element_text(angle = 45, hjust = 1))
+theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+scale_y_continuous(
+    breaks = scales::pretty_breaks(n = 10),
+    labels = scales::percent_format(accuracy = 1))
 
 ## save
-ggsave("power_plot.png")
+ggsave("power_plot.png", width = 5, height = 4)
 
 
-pi0 <- 1
-n <- 1000
-n_null <- n*pi0
-mu <- 2
-trueNulls <- seq_len(n_null)
-null_idx <- seq(n_null)
-alt_idx <- seq(n_null+1, n)
-lambda <- 0.5
-FDP <- c()
-for(i in 1:1000){
-    pvals <- generatePvals(n, n_null, mu)
-    pvals_adj <- adjust.p(pvals, pi0 = pi0)$adjp$adjusted.p
-    FDP[i] <- sum(pvals_adj[null_idx] <= alpha)/ max(1, sum(pvals <= alpha))
-}
 
 
-mean(FDP)
+
+
+g_legend<-function(a.gplot){
+  tmp <- ggplot_gtable(ggplot_build(a.gplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)}
+
+mylegend<-g_legend(p1)
+
+p3 <- grid.arrange(arrangeGrob(p1 + theme(legend.position="none"),
+                         p2 + theme(legend.position="none"),
+                         nrow=1),
+             mylegend, nrow=2,heights=c(10, 1))

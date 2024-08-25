@@ -1,8 +1,10 @@
-devtools::load_all()
+## This script is used to simulate the Expectation and MSE for estimating pi0 under different pi0 values
+## You MUST create your parallel backend beforehand, e.g.:
+## param <- SnowParam(workers = 20)
+
 source("setup.r",local =TRUE)
 library(BiocParallel)
 library(cp4p)
-param <- SnowParam(workers = 20, type = "SOCK", progressbar =TRUE, RNGseed = 1, tasks=100)
 
 pi0_list <- seq(0,1,0.2)
 
@@ -17,12 +19,13 @@ for(pi0 in pi0_list){
     mu <- 2
     trueNulls <- seq_len(n_null)
     lambda_list <- c(0, 0.3, 0.5, 0.7, 0.9)
-
-
     nsim <- 1000
-    simulation2 <- function(x, lambda_list, pi_generator, story_generator, generatePvals, n, n_null, mu, trueNulls){
-        devtools::load_all(quiet = TRUE)
-        pvals <- generatePvals(n, n_null, mu)
+    
+    set.seed(1)
+    pvalsList <- lapply(1:nsim, function(x) generatePvals(n, n_null, mu))
+
+    simulation2 <- function(x, lambda_list, pi_generator, story_generator, generatePvals, n, n_null, mu, trueNulls, pvalsList){
+        pvals <- pvalsList[[x]]
         pis <- lapply(lambda_list, pi_generator, pvals=pvals)
         story_pis <- lapply(lambda_list, story_generator)
         res_others <- c()
@@ -33,7 +36,7 @@ for(pi0 in pi0_list){
         for(i in seq_along(pis)){
             res_story[i] <- story_pis[[i]](pvals)
             res_true_null[i] <- pis[[i]](trueNulls)
-            res_GCB[i] <- pi_BJ_fast(pis[[i]], pvals, 0.05, c(0,1), c(0,1))$upper
+            res_GCB[i] <- generalExceedance::pi_BJ_fast(pis[[i]], pvals, 0.05, c(0,1), c(0,1))$upper
         }
         methods <- c("st.boot", "st.spline", "langaas", "jiang", "histo", "pounds", "abh","slim")
         res_others<- sapply(methods, function(method) cp4p::estim.pi0(pvals, pi0.method = method)[[1]])
@@ -44,7 +47,9 @@ for(pi0 in pi0_list){
     res <- bplapply(1:nsim, simulation2, BPPARAM = param, 
     lambda_list=lambda_list, 
     pi_generator = pi_generator, story_generator = story_generator, 
-    generatePvals = generatePvals, n = n, n_null = n_null, mu = mu, trueNulls = trueNulls)
+    generatePvals = generatePvals, 
+    n = n, n_null = n_null, mu = mu, trueNulls = trueNulls,
+    pvalsList = pvalsList)
 
     ## results are list of lists, 
     ## combine elelments of each list by row
@@ -83,20 +88,29 @@ for(pi0 in pi0_list){
 colnames(ave_table) <- paste0("pi0: ", pi0_list)
 colnames(SSE_table) <- paste0("pi0: ", pi0_list)
 
+## save ave_table and SSE_table
+save(ave_table, SSE_table, file = "simulation2.RData")
 
-## save excel
-library(openxlsx)
-write.xlsx(round(ave_table,3), "ave_table.xlsx")
-write.xlsx(signif(SSE_table,2), "SSE_table.xlsx")
+## load data
+load("simulation2.RData")
 
-select <- c("st.boot", "st.spline", "langaas", "jiang",
-"histo", "pounds", "abh", "slim", "GCB estimator 0",
+
+select <- c("abh", "st.spline", "st.boot", "langaas", "jiang", "GCB estimator 0",
 "GCB estimator 0.3", "GCB estimator 0.5", "GCB estimator 0.7",
 "GCB estimator 0.9"
 )
 
-SSE_table$row_ave <- apply(SSE_table, 1, mean)
+rowSSE <- as.numeric(apply(SSE_table, 1, mean))
+SSE_table <- cbind(SSE_table, rowmean = rowSSE)
 
-write.xlsx(round(ave_table[select,],3), "ave_table_paper.xlsx")
-write.xlsx(signif(SSE_table[select,],2), "SSE_table_paper.xlsx")
+ave_table <- round(ave_table[select,],3)
+SSE_table <- signif(SSE_table[select,],2)
+
+ave_table <- as.data.frame(cbind(select, ave_table))
+SSE_table <- as.data.frame(cbind(select, SSE_table))
+
+## save excel
+library(openxlsx)
+write.xlsx(ave_table, "ave_table_paper.xlsx")
+write.xlsx(SSE_table, "SSE_table_paper.xlsx")
 

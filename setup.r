@@ -36,6 +36,10 @@ MSE <- function(res, pi0){
 }
 
 
+SSE <- function(res, pi0){
+  colSums((res-pi0)^2)
+}
+
 my_round = function(x, n=2) {
   max(abs(round(x, n)), abs(signif(x, 1))) * sign(x)
   }
