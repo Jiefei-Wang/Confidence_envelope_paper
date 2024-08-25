@@ -26,3 +26,9 @@ Below is the files in this repository:
 - `simulation3.r`: Estimate the FDR
 - `example.r`: Code for the paper example
 
+The simulation uses parallel backend to speed up calculation. Therefore, you need to create a cluster before running the code. Here is an example of creating a cluster with 4 cores:
+
+```r
+library(BiocParallel)
+param <- SnowParam(workers = 4)
+```
